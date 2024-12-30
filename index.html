@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kevinludashi的图片水印添加工具</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+
+    #container {
+      position: relative;
+      display: inline-block;
+    }
+
+    canvas {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .controls {
+      margin-top: 20px;
+    }
+
+    input[type="file"], input[type="range"] {
+      margin: 10px;
+    }
+
+    /* 说明部分样式 */
+    .instructions {
+      position: fixed;
+      top: 50%; /* 垂直居中 */
+      left: 50%; /* 水平居中 */
+      transform: translate(-50%, -50%); /* 使用 transform 精确居中 */
+      font-size: 16px;
+      color: #333;
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 80%;
+      z-index: 10;
+      display: block; /* 默认显示说明 */
+    }
+
+    .instructions ul {
+      margin: 0;
+      padding-left: 0; /* 去掉左侧内边距 */
+      list-style-type: none; /* 去掉默认的项目符号 */
+    }
+
+    .instructions li {
+      margin-bottom: 15px; /* 增加每行说明之间的间距 */
+      padding-left: 30px; /* 为每行文字增加左间距 */
+    }
+
+    .instructions h3 {
+      text-align: center; /* 标题居中 */
+      font-size: 30px;
+      color: red;
+      margin-top: 10px; /* 增加标题的上间距 */
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 5px;
+      right: 20px;
+      font-size: 20px;
+      color: #888;
+      cursor: pointer;
+    }
+    /* 说明部分样式 */
+  </style>
+</head>
+<body>
+
+  <!-- 说明部分 -->
+  <div class="instructions" id="instructions">
+    <span class="close-btn" id="closeBtn" style="color: red; font-size: 50px;">&times;</span> <!-- 关闭按钮 -->
+    <h3>温馨提示：</h3>
+    <ul>
+      <li>1、由于网页托管于国际服务器，可能会出现加载不出来的问题（该服器很安全，可放心使用）；</li>
+      <li>2、当页面出现BUG或者打不开时请尝试多刷新几次（刷新20+次都属于正常）；</li>
+      <li>3、当刷新页面20+次后依然无法打开时可尝试复制网址更换浏览器打开；</li>
+      <li>4、微信打开时可能会提醒有风险，请忽略，也可能会显示打不开，请尝试多刷新几次就能打开；</li>
+      <li>5、先选图片，后选水印；</li>
+      <li><a href="https://coco241031.lanzout.com/iXyql2jed9le" id="openWatermark" target="_blank">6、下载作者水印</a></li>
+	  <li>7、水印建议尺寸300px*300px，72ppi，png格式即可；</li>
+    </ul>
+  </div>
+
+  <h1>图片水印添加工具</h1>
+
+  <!-- 上传图片区域 -->
+  <div style="display: flex; justify-content: center; align-items: center; gap: 10px; width: 100%; margin-top: 20px;">
+    <!-- 上传背景图片按钮 -->
+    <div>
+      <label for="imageInput" style="cursor: pointer; padding: 10px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; text-align: center; font-size: 16px; display: inline-block;">上背景</label>
+      <input type="file" id="imageInput" accept="image/*" style="display: none;" />
+    </div>
+    
+    <!-- 上传水印图片按钮 -->
+    <div>
+      <label for="watermarkInput" style="cursor: pointer; padding: 10px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; text-align: center; font-size: 16px; display: inline-block;">上传水印</label>
+      <input type="file" id="watermarkInput" accept="image/*" style="display: none;" />
+    </div>
+    
+    <!-- 保存水印图片按钮 -->
+    <button id="saveButton" style="cursor: pointer; padding: 10px 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; text-align: center; font-size: 16px;">
+      完成保存
+    </button>
+  </div>
+
+
+
+
+  <div class="controls">
+    <!-- 调节水印大小 -->
+    <label for="watermarkSize">水印大小: </label>
+    <input type="range" id="watermarkSize" min="10" max="200" value="50" step="1" />
+    <span id="sizeValue">50%</span><br>
+
+    <!-- 调节水印透明度 -->
+    <label for="watermarkOpacity">水印透明度: </label>
+    <input type="range" id="watermarkOpacity" min="0" max="1" step="0.01" value="0.5" />
+    <span id="opacityValue">25%</span>
+  </div>
+
+
+  <!-- 图片预览和水印效果显示 -->
+  <div id="container">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  
+  <script>
+    let img = new Image();
+    let watermarkImg = new Image();
+    let canvas = document.getElementById('canvas');
+    let ctx = canvas.getContext('2d');
+    let watermarkSizeInput = document.getElementById('watermarkSize');
+    let watermarkOpacityInput = document.getElementById('watermarkOpacity');
+    let sizeValue = document.getElementById('sizeValue');
+    let opacityValue = document.getElementById('opacityValue');
+
+    // 图片和水印上传
+    document.getElementById('imageInput').addEventListener('change', function(event) {
+      let file = event.target.files[0];
+      if (file) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+          img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            drawWatermark();
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById('watermarkInput').addEventListener('change', function(event) {
+      let file = event.target.files[0];
+      if (file) {
+        let reader = new FileReader();
+        reader.onload = function(e) {
+          watermarkImg.onload = function() {
+            drawWatermark();
+          };
+          watermarkImg.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 绘制水印
+    function drawWatermark() {
+      if (!img.src || !watermarkImg.src) return;
+
+      // 清空画布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 绘制底图
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      let size = watermarkSizeInput.value;
+      let opacity = watermarkOpacityInput.value;
+
+      // 设置水印透明度
+      ctx.globalAlpha = opacity;
+
+      // 计算水印的大小
+      let watermarkWidth = (watermarkImg.width * size) / 100;
+      let watermarkHeight = (watermarkImg.height * size) / 100;
+
+      // 均匀分布水印
+      let cols = Math.ceil(canvas.width / watermarkWidth);
+      let rows = Math.ceil(canvas.height / watermarkHeight);
+
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          ctx.drawImage(watermarkImg, i * watermarkWidth, j * watermarkHeight, watermarkWidth, watermarkHeight);
+        }
+      }
+
+      // 重置透明度
+      ctx.globalAlpha = 1;
+    }
+
+    // 实时更新水印大小值
+    watermarkSizeInput.addEventListener('input', function() {
+      sizeValue.textContent = watermarkSizeInput.value + '%';
+      drawWatermark();
+    });
+
+    // 实时更新水印透明度值
+    watermarkOpacityInput.addEventListener('input', function() {
+      opacityValue.textContent = Math.round(watermarkOpacityInput.value * 100) + '%';
+      drawWatermark();
+    });
+
+    // 保存带水印的图片
+    document.getElementById('saveButton').addEventListener('click', function() {
+      // 获取带水印的图片数据 URL
+      let dataUrl = canvas.toDataURL('image/png'); // PNG格式保存，保留高质量
+
+      // 创建一个临时链接，触发下载
+      let link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = 'watermarked-image.png'; // 设置下载文件名
+      link.click(); // 自动点击下载链接
+    });
+
+    // 关闭说明按钮
+    let closeBtn = document.getElementById('closeBtn');
+    closeBtn.addEventListener('click', () => {
+      document.getElementById('instructions').style.display = 'none'; // 隐藏说明部分
+    });
+  </script>
+
+</body>
+</html>
